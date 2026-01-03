@@ -1,0 +1,69 @@
+DIM = 6 x 6
+TEMPO = 100
+MON file: folder/1.m
+Line: XXXXXX
+Line: XoooXX
+Line: XoooXX
+Line: Xooo@X
+Line: XooooX
+Line: XXXXXX
+Ghost passo: 1
+Ghost Pos = 4 x 1
+Creating threads
+Server read opcode 3 from client 1
+Received command 'S' from client 1
+KEY S
+Server read opcode 3 from client 1
+Received command 'S' from client 1
+KEY S
+Server read opcode 3 from client 1
+Received command 'S' from client 1
+KEY S
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'A' from client 1
+KEY A
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'A' from client 1
+KEY A
+Server read opcode 3 from client 1
+Received command 'A' from client 1
+KEY A
+Server read opcode 3 from client 1
+Received command 'A' from client 1
+KEY A
+Server read opcode 3 from client 1
+Received command 'A' from client 1
+KEY A
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'A' from client 1
+KEY A
+Server read opcode 3 from client 1
+Received command 'D' from client 1
+KEY D
+Server read opcode 3 from client 1
+Received command 'W' from client 1
+KEY W

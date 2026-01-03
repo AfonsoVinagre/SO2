@@ -86,6 +86,7 @@ Fils the board with the information coming from the file
 int load_level(board_t* board, char* filename, char* dirname, int accumulated_points);
 // Unloads levels loaded by load_level
 void unload_level(board_t * board);
+void debug(const char * format, ...);
 
 void print_board(board_t* board);
 

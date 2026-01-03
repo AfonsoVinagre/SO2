@@ -16,17 +16,19 @@ Board board;
 bool stop_execution = false;
 int tempo;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-
+int thread_shutdown_client = 0;
 static void *receiver_thread(void *arg) {
     (void)arg;
 
     while (true) {
-        
+        debug("Waiting for board update...\n"); 
         Board board = receive_board_update();
-
-        if (!board.data || board.game_over == 1){
+        debug("Board update received: data=%s,\n",
+              board.data ? board.data : "NULL");
+        if (!board.data || board.game_over == 1 || thread_shutdown_client) {
             pthread_mutex_lock(&mutex);
             stop_execution = true;
+            debug("Received game over signal, stopping execution.\n");
             pthread_mutex_unlock(&mutex);
             break;
         }
@@ -86,6 +88,7 @@ int main(int argc, char *argv[]) {
     terminal_init();
     set_timeout(500);
     draw_board_client(board);
+    debug("Starting main input loop...\n");
     refresh_screen();
 
     char command;
@@ -95,8 +98,11 @@ int main(int argc, char *argv[]) {
 
         pthread_mutex_lock(&mutex);
         if (stop_execution)
+        {
+            debug("Stopping main input loop...\n");
             pthread_mutex_unlock(&mutex);
             break;
+        }
         pthread_mutex_unlock(&mutex);
 
         if (cmd_fp) {
@@ -142,16 +148,16 @@ int main(int argc, char *argv[]) {
         pacman_play(command);
 
     }
-
+    debug("Main input loop ended.\n");
     pacman_disconnect();
-
+    thread_shutdown_client = 1;
     pthread_join(receiver_thread_id, NULL);
-
+    debug("Receiver thread joined.\n");
     if (cmd_fp)
         fclose(cmd_fp);
 
     pthread_mutex_destroy(&mutex);
-
+    debug("Starting terminal cleanup...\n");
     terminal_cleanup();
 
     return 0;

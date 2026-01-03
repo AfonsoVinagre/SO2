@@ -323,6 +323,7 @@ char get_input() {
 void terminal_cleanup() {
     // Restore terminal settings and clean up ncurses
     endwin();
+    debug("Acabou");
 }
 
 void set_timeout(int timeout_ms) {
