@@ -9,61 +9,240 @@ Line: XooooX
 Line: XXXXXX
 Ghost passo: 1
 Ghost Pos = 4 x 1
-Creating threads
-Server read opcode 3 from client 1
+Points carried over: 0
+POints: 0
+POints: 0
+POints: 0
+POints: 0
+POints: 0
+POints: 0
+POints: 0
 Received command 'S' from client 1
 KEY S
-Server read opcode 3 from client 1
+POints: 1
+POints: 1
+POints: 1
+POints: 1
 Received command 'S' from client 1
 KEY S
-Server read opcode 3 from client 1
+POints: 2
+POints: 2
+POints: 2
+POints: 2
+POints: 2
+POints: 2
+POints: 2
+POints: 2
+POints: 2
 Received command 'S' from client 1
 KEY S
-Server read opcode 3 from client 1
+POints: 3
+POints: 3
+POints: 3
+POints: 3
 Received command 'D' from client 1
 KEY D
-Server read opcode 3 from client 1
+POints: 4
+POints: 4
+POints: 4
+POints: 4
+POints: 4
 Received command 'D' from client 1
 KEY D
-Server read opcode 3 from client 1
-Received command 'A' from client 1
-KEY A
-Server read opcode 3 from client 1
+POints: 5
+POints: 5
+POints: 5
+POints: 5
+POints: 5
+POints: 5
+POints: 5
+POints: 5
 Received command 'D' from client 1
 KEY D
-Server read opcode 3 from client 1
-Received command 'D' from client 1
-KEY D
-Server read opcode 3 from client 1
-Received command 'D' from client 1
-KEY D
-Server read opcode 3 from client 1
-Received command 'A' from client 1
-KEY A
-Server read opcode 3 from client 1
-Received command 'A' from client 1
-KEY A
-Server read opcode 3 from client 1
-Received command 'A' from client 1
-KEY A
-Server read opcode 3 from client 1
-Received command 'A' from client 1
-KEY A
-Server read opcode 3 from client 1
-Received command 'D' from client 1
-KEY D
-Server read opcode 3 from client 1
-Received command 'D' from client 1
-KEY D
-Server read opcode 3 from client 1
-Received command 'D' from client 1
-KEY D
-Server read opcode 3 from client 1
-Received command 'A' from client 1
-KEY A
-Server read opcode 3 from client 1
-Received command 'D' from client 1
-KEY D
-Server read opcode 3 from client 1
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
 Received command 'W' from client 1
 KEY W
+POints: 6
+DIM = 6 x 6
+TEMPO = 100
+MON file: folder/1.m
+Line: XXXXXX
+Line: XoooXX
+Line: XoooXX
+Line: Xooo@X
+Line: XooooX
+Line: XXXXXX
+Ghost passo: 1
+Ghost Pos = 4 x 1
+Points carried over: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+POints: 6
+Received command 'D' from client 1
+KEY D
+POints: 7
+POints: 7
+POints: 7
+Received command 'D' from client 1
+KEY D
+POints: 8
+POints: 8
+POints: 8
+Received command 'D' from client 1
+KEY D
+POints: 8
+POints: 8
+POints: 8
+POints: 8
+Received command 'A' from client 1
+KEY A
+POints: 8
+POints: 8
+POints: 8
+Received command 'A' from client 1
+KEY A
+POints: 8
+POints: 8
+POints: 8
+Received command 'D' from client 1
+KEY D
+POints: 8
+POints: 8
+POints: 8
+Received command 'D' from client 1
+KEY D
+POints: 8
+POints: 8
+POints: 8
+Received command 'D' from client 1
+KEY D
+POints: 8
+POints: 8
+POints: 8
+Received command 'A' from client 1
+KEY A
+POints: 8
+POints: 8
+POints: 8
+Received command 'A' from client 1
+KEY A
+POints: 8
+POints: 8
+Received command 'A' from client 1
+KEY A
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+POints: 9
+Received command 'S' from client 1
+KEY S
+POints: 10
+POints: 10
+POints: 10
+Received command 'D' from client 1
+KEY D
+POints: 11
+POints: 11
+POints: 11
+Received command 'D' from client 1
+POints: 11
+KEY D
+POints: 12
+POints: 12
+POints: 12
+Received command 'S' from client 1
+KEY S
+POints: 13
+POints: 13
+Received command 'D' from client 1
+KEY D
+POints: 13
+Client 1 requested disconnect.
