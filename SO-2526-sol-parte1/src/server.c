@@ -12,7 +12,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/select.h>
-
+#include <semaphore.h>
+#include <signal.h>
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
@@ -64,7 +65,24 @@ typedef struct {
     char* arg_dir;
     session_t* session;
 } client_args_t;
+typedef struct {
+    int max_levels;
+    char *arg_dir;
+} manager_thread_arg_t;
+typedef struct {
+    char* arg_dir;
+    char* server_fifo;
+    int max_levels;
+} main_thread_arg_t;
 
+session_t** buffer;
+int in=0;
+int out=0;
+pthread_mutex_t buffer_lock;
+sem_t empty;
+sem_t full;
+int active_clients = 0;
+pthread_mutex_t active_clients_lock;
 ssize_t read_full(int fd, void *buf, size_t size) {
     size_t total = 0;
     while (total < size) {
@@ -84,7 +102,7 @@ ssize_t write_full(int fd, const void *buf, size_t size) {
     }
     return total;
 }
-void send_board_update(board_t *board, int notif_fd,int victory) {
+void send_board_update(board_t *board, int notif_fd,int victory,session_t *session) {
     if (!board) return;
 
     pthread_rwlock_rdlock(&board->state_lock);
@@ -99,8 +117,11 @@ void send_board_update(board_t *board, int notif_fd,int victory) {
     board_msg.points = board->pacmans[0].points;
     debug("POints: %d\n", board_msg.points);
     if (write_full(notif_fd, &board_msg, sizeof(board_msg_t)) != sizeof(board_msg_t)) {
-        pthread_rwlock_unlock(&board->state_lock);
         perror("write notif_pipe");
+        pthread_rwlock_unlock(&board->state_lock);
+        close(notif_fd);
+        session->active = 0;
+        session->thread_shutdown = 1;
         return;
     }
 
@@ -247,9 +268,9 @@ void* periodic_update_thread(void* arg) {
     session_t* session = args->session;
     board_t* board = session->board;
     while (!session->thread_shutdown) {
-        sleep_ms(board->tempo);  // Enviar update a cada tempo
+        sleep_ms(board->tempo);
         if (!session->thread_shutdown) {
-            send_board_update(board, session->notif_fd,0);
+            send_board_update(board, session->notif_fd,0, session);
         }
     }
     
@@ -310,7 +331,6 @@ void *pacman_input_thread(void *arg) {
         close(session->req_fd);
         session->active = 0;
         session->thread_shutdown = 1;
-        printf("Client %d disconnected.\n", session->id);
         break;
     }
 }
@@ -323,7 +343,6 @@ void *client_thread(void *arg) {
     session_t* session = args->session;
     board_t* game_board = session->board;
     DIR* level_dir = opendir(arg_dir);
-    open_debug_file("debug.log");
     if (level_dir == NULL) {
         fprintf(stderr, "Failed to open directory: %s\n", arg_dir);
         return 0;
@@ -341,7 +360,6 @@ void *client_thread(void *arg) {
         if (!dot) continue;
         if (strcmp(dot, ".lvl") == 0) {
             load_level(game_board, entry->d_name, arg_dir, accumulated_points);
-            debug("Points carried over: %d\n", accumulated_points);
             current_level++;
             while(true) {
                 pthread_t pacman_tid;
@@ -383,14 +401,12 @@ void *client_thread(void *arg) {
                     sleep_ms(game_board->tempo);
                     end_game = true;
                     break;
-                }
-
-                   
+                }  
             }
             if(current_level == levels && game_board->pacmans[0].alive) {
-                send_board_update(game_board, session->notif_fd,1);
+                send_board_update(game_board, session->notif_fd,1, session);
             }else{
-                send_board_update(game_board, session->notif_fd,0);
+                send_board_update(game_board, session->notif_fd,0, session);
             }
             unload_level(game_board);
         }
@@ -400,36 +416,69 @@ void *client_thread(void *arg) {
     free(game_board);
     free(session);
     free(arg);
+    pthread_mutex_lock(&active_clients_lock);
+    active_clients--;
+    pthread_mutex_unlock(&active_clients_lock);
     return NULL;
 }
-int main(int argc, char *argv[]) {
-    int id=1;
-    if (argc != 4) {
-        printf("Usage: %s <levels_dir> <max_games> <server_fifo>\n",argv[0]);
-        exit(1);
-    }
+void *manager_thread(void *arg) {
+    manager_thread_arg_t* args = (manager_thread_arg_t*) arg;
+    char* arg_dir = args->arg_dir;
+    int max_levels = args->max_levels;
+    while (1) {
+        sem_wait(&full);
+        pthread_mutex_lock(&buffer_lock);
+        session_t* session = buffer[out];
+        out = (out + 1) % (max_levels);
+        pthread_mutex_unlock(&buffer_lock);
+        sem_post(&empty);
 
-    char *server_fifo = argv[3];
-    //int max_games = atoi(argv[2]);
-    printf("Server FIFO: %s\n", server_fifo);
-    // Criar FIFO do servidor
+        client_args_t* cargs = malloc(sizeof(client_args_t));
+        cargs->arg_dir = arg_dir; 
+        cargs->session = session;
+        pthread_t client_tid;
+        if (pthread_create(&client_tid, NULL, client_thread, cargs) != 0) {
+            perror("pthread_create");
+            free(cargs);
+            free(session);
+            continue;
+        }
+        session->tid = client_tid;
+    }
+    return NULL;
+}
+void *main_thread(void *arg) {
+    main_thread_arg_t* args = (main_thread_arg_t*) arg;
+    char* arg_dir = args->arg_dir;
+    char* server_fifo = args->server_fifo;
+    int max_levels = args->max_levels;
+    pthread_mutex_init(&buffer_lock, NULL);
+    pthread_mutex_init(&active_clients_lock, NULL);
+    buffer = malloc(max_levels * sizeof(session_t*));
+    sem_init(&empty, 0, max_levels);
+    sem_init(&full, 0, 0);
+
     if (mkfifo(server_fifo, 0666) == -1 && errno != EEXIST) {
         printf("Error creating server FIFO: %s\n", strerror(errno));
         perror("mkfifo");
         exit(1);
     }
-    printf("Server FIFO created.\n");
-    // Abrir FIFO (truque anti-EOF)
     int server_fd = open(server_fifo, O_RDONLY | O_NONBLOCK);
     int dummy_fd  = open(server_fifo, O_WRONLY);
-    printf("Server FIFO opened.\n");
     if (server_fd < 0 || dummy_fd < 0) {
         printf("Error opening server FIFO: %s\n", strerror(errno));
         perror("open fifo");
         exit(1);
     }
-
+    pthread_t manager_tids[max_levels];
+    manager_thread_arg_t manager_args;
+    manager_args.arg_dir = arg_dir;
+    manager_args.max_levels = max_levels;
+    for(int i=0;i<max_levels;i++){
+        pthread_create(&manager_tids[i], NULL, manager_thread, &manager_args);
+    }
     printf("Server ready. Waiting for clients...\n");
+    int id=1;
     while (1) {
         char opcode;
 
@@ -442,31 +491,31 @@ int main(int argc, char *argv[]) {
             connect_msg_t msg;
             msg.opcode = opcode;
 
-            // Ler nomes dos FIFOs
             read_full(server_fd, msg.req_pipe, 40);
             read_full(server_fd, msg.notif_pipe, 40);
 
-            printf("New client:\n");
-            printf("  req_fifo  = %s\n", msg.req_pipe);
-            printf("  notif_fifo= %s\n", msg.notif_pipe);
-
-            // Abrir FIFO de notificações do cliente
             int notif_fd = open(msg.notif_pipe, O_WRONLY);
             int req_fd = open(msg.req_pipe, O_RDONLY);
-            printf("Notification FIFO opened.\n");
             if (notif_fd < 0) {
                 printf("Error opening notification FIFO: %s\n", strerror(errno));
                 perror("open notif fifo");
                 continue;
             }
+            pthread_mutex_lock(&active_clients_lock);
 
-            // Enviar resposta (sucesso)
+            while (active_clients == max_levels) {
+                pthread_mutex_unlock(&active_clients_lock);
+                sleep(1); 
+                pthread_mutex_lock(&active_clients_lock);
+            }
+
+            active_clients++;
+
+            pthread_mutex_unlock(&active_clients_lock);
             char reply[2];
             reply[0] = OP_CONNECT;
-            reply[1] = id++;  // sucesso
-            printf("Sending client ID %d\n", reply[1]);
+            reply[1] = id++;
             write_full(notif_fd, reply, 2);
-            printf("Client connected with ID %d\n", reply[1]);
             session_t* session = malloc(sizeof(session_t));
             session->active = 1;
             session->id = reply[1];
@@ -474,20 +523,37 @@ int main(int argc, char *argv[]) {
             session->req_fd = req_fd;
             session->thread_shutdown = 0;
             session->input_command = '\0';
+            pthread_mutex_init(&session->input_lock, NULL);
             session->board = malloc(sizeof(board_t));
             pthread_rwlock_init(&session->board->state_lock, NULL);
-            client_args_t* args = malloc(sizeof(client_args_t));
-            args->arg_dir = argv[1];
-            args->session = session;
-            pthread_t client_tid;
-            if (pthread_create(&client_tid, NULL, client_thread, args) != 0) {
-                perror("pthread_create");
-                free(args);
-                continue;
-            }
-            session->tid = client_tid;
+            sem_wait(&empty);                    
+            pthread_mutex_lock(&buffer_lock);
+            buffer[in] = session;
+            in = (in + 1) % max_levels;
+            pthread_mutex_unlock(&buffer_lock);
+            sem_post(&full);
         }
     }
+    return NULL;
+}
+int main(int argc, char *argv[]) {
+    open_debug_file("debug.log");
+    signal(SIGPIPE, SIG_IGN);
+    if (argc != 4) {
+        printf("Usage: %s <levels_dir> <max_games> <server_fifo>\n",argv[0]);
+        exit(1);
+    }
+    main_thread_arg_t main_args;
+    main_args.arg_dir = argv[1];
+    main_args.max_levels = atoi(argv[2]);
+    main_args.server_fifo = argv[3];
+    pthread_t main_tid;
+    if (pthread_create(&main_tid, NULL, main_thread, &main_args) != 0) {
+        perror("pthread_create");
+        exit(1);
+    }
+    pthread_join(main_tid, NULL);
+    
     return 0;
 }
 

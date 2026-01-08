@@ -108,7 +108,6 @@ int pacman_connect(char const *req_pipe_path, char const *notif_pipe_path, char 
     printf("Failed to write to server pipe\n");
     return 1;
   }
-  printf("Connection request sent to server\n");
   session.req_pipe = open(req_pipe_path,O_WRONLY);
   session.notif_pipe = notif_fd;
   strncpy(session.req_pipe_path, req_pipe_path, MAX_PIPE_PATH_LENGTH);
@@ -121,8 +120,7 @@ int pacman_connect(char const *req_pipe_path, char const *notif_pipe_path, char 
       if (r == 2)
           break;
       if (r == -1 && errno == EAGAIN)
-        printf("Waiting for server response...\n");
-        continue;   // ainda não chegou
+        continue;
       perror("read notif_pipe");
       return 1;
   }
@@ -135,7 +133,6 @@ int pacman_connect(char const *req_pipe_path, char const *notif_pipe_path, char 
     return 1;
   }
   session.id = reply[1];
-  printf("Connected with session id %d\n",session.id);
   close(server_pipe);
   return 0;
 }
@@ -161,7 +158,6 @@ int pacman_disconnect(void) {
       return 1;
 
   char opcode = OP_CODE_DISCONNECT;
-  debug("Req pipe %d\n", session.req_pipe);
   if (write(session.req_pipe, &opcode, 1) != 1) {
       perror("write req_pipe");
       debug("Failed to send disconnect request\n");
@@ -186,7 +182,6 @@ int pacman_disconnect(void) {
 Board receive_board_update(void) {
     Board board;
     board.data = NULL;
-    debug("Receiving board update...\n");
     if (session.id == -1) {
         debug("Session not active, returning empty board\n");
         return board;
