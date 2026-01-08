@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <time.h>
 
 
 struct Session {
@@ -51,9 +52,12 @@ ssize_t read_full(int fd, void *buf, size_t size) {
             return 0;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            usleep(1000);  
-            continue;
-        }
+          struct timespec ts;
+          ts.tv_sec = 0;
+          ts.tv_nsec = 1 * 1000 * 1000; // 1 ms
+          nanosleep(&ts, NULL);
+          continue;
+        } 
         if (errno == EINTR) {
             continue;  
         }
@@ -64,19 +68,21 @@ ssize_t read_full(int fd, void *buf, size_t size) {
 }
 
 int pacman_connect(char const *req_pipe_path, char const *notif_pipe_path, char const *server_pipe_path) {
-  if(mkfifo(req_pipe_path,0666)==-1){
-    perror("mkfifo req_pipe");
-    unlink(req_pipe_path);
-    printf("Failed to create req pipe\n");
-    return 1;
+  if (mkfifo(req_pipe_path, 0666) == -1) {
+      if (errno != EEXIST) {
+          perror("mkfifo req_pipe");
+          return 1;
+      }
   }
-  if(mkfifo(notif_pipe_path,0666)==-1){
-    perror("mkfifo notif_pipe");
-    unlink(req_pipe_path);
-    unlink(notif_pipe_path);
-    printf("Failed to create notif pipe\n");
-    return 1;
+
+  if (mkfifo(notif_pipe_path, 0666) == -1) {
+      if (errno != EEXIST) {
+          perror("mkfifo notif_pipe");
+          unlink(req_pipe_path);
+          return 1;
+      }
   }
+
   int notif_fd = open(notif_pipe_path, O_RDONLY | O_NONBLOCK);
   if(notif_fd==-1){
     perror("open notif_pipe");

@@ -75,6 +75,7 @@ typedef struct {
     int max_levels;
 } main_thread_arg_t;
 
+
 session_t** buffer;
 int in=0;
 int out=0;
@@ -83,6 +84,13 @@ sem_t empty;
 sem_t full;
 int active_clients = 0;
 pthread_mutex_t active_clients_lock;
+
+volatile sig_atomic_t sigusr1_received = 0;
+
+session_t **active_sessions = NULL;
+int max_games_global = 0;
+pthread_mutex_t active_sessions_lock = PTHREAD_MUTEX_INITIALIZER;
+
 ssize_t read_full(int fd, void *buf, size_t size) {
     size_t total = 0;
     while (total < size) {
@@ -313,8 +321,15 @@ void *pacman_input_thread(void *arg) {
     }
 
     if (r < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            struct timespec ts;
+            ts.tv_sec = 0;
+            ts.tv_nsec = 10 * 1000 * 1000; // 10 ms
+            nanosleep(&ts, NULL);
+            continue;
+        }
         perror("read req pipe");
-        continue;
+        break;;
     }
 
     if (opcode == OP_PLAY) {
@@ -414,8 +429,16 @@ void *client_thread(void *arg) {
     pthread_join(inputtid, NULL);
     closedir(level_dir);
     free(game_board);
+    pthread_mutex_lock(&active_sessions_lock);
+    for (int i = 0; i < max_games_global; i++) {
+        if (active_sessions[i] == session) {
+            active_sessions[i] = NULL;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&active_sessions_lock);
     free(session);
-    free(arg);
+    free(args);
     pthread_mutex_lock(&active_clients_lock);
     active_clients--;
     pthread_mutex_unlock(&active_clients_lock);
@@ -447,6 +470,74 @@ void *manager_thread(void *arg) {
     }
     return NULL;
 }
+
+void sigusr1_handler(int signo) {
+    (void) signo;
+    sigusr1_received = 1;
+}
+
+typedef struct {
+    int id;
+    int points;
+} top_client_t;
+
+static int cmp_top_clients(const void *a, const void *b) {
+    const top_client_t *c1 = a;
+    const top_client_t *c2 = b;
+    return c2->points - c1->points;  // ordem decrescente
+}
+
+void generate_top5_file(void) {
+    top_client_t *clients;
+    int count = 0;
+
+    clients = malloc(sizeof(top_client_t) * max_games_global);
+    if (!clients) {
+        perror("malloc top clients");
+        return;
+    }
+
+    /* copiar informação das sessões ativas */
+    pthread_mutex_lock(&active_sessions_lock);
+    for (int i = 0; i < max_games_global; i++) {
+        session_t *s = active_sessions[i];
+        if (s && s->active && s->board) {
+            int pts = 0;
+
+            /* proteger leitura do board */
+            pthread_rwlock_rdlock(&s->board->state_lock);
+            pts = s->board->pacmans[0].points;
+            pthread_rwlock_unlock(&s->board->state_lock);
+
+            clients[count].id = s->id;
+            clients[count].points = pts;
+            count++;
+        }
+    }
+    pthread_mutex_unlock(&active_sessions_lock);
+
+    /* ordenar por pontuação */
+    qsort(clients, count, sizeof(top_client_t), cmp_top_clients);
+
+    /* escrever ficheiro */
+    FILE *f = fopen("top5_clients.txt", "w");
+    if (!f) {
+        perror("fopen top5_clients.txt");
+        free(clients);
+        return;
+    }
+
+    int limit = (count < 5) ? count : 5;
+    for (int i = 0; i < limit; i++) {
+        fprintf(f, "%d %d\n", clients[i].id, clients[i].points);
+    }
+
+    fclose(f);
+    free(clients);
+
+    debug("SIGUSR1 received → top5_clients.txt generated (%d entries)\n", limit);
+}
+
 void *main_thread(void *arg) {
     main_thread_arg_t* args = (main_thread_arg_t*) arg;
     char* arg_dir = args->arg_dir;
@@ -480,6 +571,12 @@ void *main_thread(void *arg) {
     printf("Server ready. Waiting for clients...\n");
     int id=1;
     while (1) {
+
+        if (sigusr1_received) {
+            sigusr1_received = 0;
+            generate_top5_file();
+        }
+
         char opcode;
 
         // Ler OP_CODE
@@ -494,8 +591,8 @@ void *main_thread(void *arg) {
             read_full(server_fd, msg.req_pipe, 40);
             read_full(server_fd, msg.notif_pipe, 40);
 
-            int notif_fd = open(msg.notif_pipe, O_WRONLY);
-            int req_fd = open(msg.req_pipe, O_RDONLY);
+            int notif_fd = open(msg.notif_pipe, O_WRONLY | O_NONBLOCK);
+            int req_fd = open(msg.req_pipe, O_RDONLY | O_NONBLOCK);
             if (notif_fd < 0) {
                 printf("Error opening notification FIFO: %s\n", strerror(errno));
                 perror("open notif fifo");
@@ -526,6 +623,14 @@ void *main_thread(void *arg) {
             pthread_mutex_init(&session->input_lock, NULL);
             session->board = malloc(sizeof(board_t));
             pthread_rwlock_init(&session->board->state_lock, NULL);
+            pthread_mutex_lock(&active_sessions_lock);
+            for (int i = 0; i < max_games_global; i++) {
+                if (active_sessions[i] == NULL) {
+                    active_sessions[i] = session;
+                    break;
+                }
+            }
+            pthread_mutex_unlock(&active_sessions_lock);
             sem_wait(&empty);                    
             pthread_mutex_lock(&buffer_lock);
             buffer[in] = session;
@@ -543,11 +648,33 @@ int main(int argc, char *argv[]) {
         printf("Usage: %s <levels_dir> <max_games> <server_fifo>\n",argv[0]);
         exit(1);
     }
+
+    /* reservar array de sessões ativas */
+    max_games_global = atoi(argv[2]);
+    active_sessions = calloc(max_games_global, sizeof(session_t *));
+    if (!active_sessions) {
+        perror("calloc active_sessions");
+        exit(1);
+    }
+
+    /* bloquear SIGUSR1 antes de criar threads */
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    /* instalar handler */
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = sigusr1_handler;
+    sigaction(SIGUSR1, &sa, NULL);
+
     main_thread_arg_t main_args;
     main_args.arg_dir = argv[1];
     main_args.max_levels = atoi(argv[2]);
     main_args.server_fifo = argv[3];
     pthread_t main_tid;
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
     if (pthread_create(&main_tid, NULL, main_thread, &main_args) != 0) {
         perror("pthread_create");
         exit(1);
