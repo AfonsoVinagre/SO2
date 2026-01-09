@@ -123,9 +123,7 @@ void send_board_update(board_t *board, int notif_fd,int victory,session_t *sessi
     board_msg.game_over = board->pacmans[0].alive ? 0 : 1;
     board_msg.victory = victory;
     board_msg.points = board->pacmans[0].points;
-    debug("POints: %d\n", board_msg.points);
     if (write_full(notif_fd, &board_msg, sizeof(board_msg_t)) != sizeof(board_msg_t)) {
-        perror("write notif_pipe");
         pthread_rwlock_unlock(&board->state_lock);
         close(notif_fd);
         session->active = 0;
@@ -474,6 +472,7 @@ void *manager_thread(void *arg) {
 void sigusr1_handler(int signo) {
     (void) signo;
     sigusr1_received = 1;
+    debug("SIGUSR1 received → generating top5_clients.txt\n");
 }
 
 typedef struct {
@@ -568,6 +567,10 @@ void *main_thread(void *arg) {
     for(int i=0;i<max_levels;i++){
         pthread_create(&manager_tids[i], NULL, manager_thread, &manager_args);
     }
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
     printf("Server ready. Waiting for clients...\n");
     int id=1;
     while (1) {
@@ -679,8 +682,6 @@ int main(int argc, char *argv[]) {
         perror("pthread_create");
         exit(1);
     }
-
-    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 
     pthread_join(main_tid, NULL);
 
