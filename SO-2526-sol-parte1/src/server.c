@@ -674,12 +674,16 @@ int main(int argc, char *argv[]) {
     main_args.max_levels = atoi(argv[2]);
     main_args.server_fifo = argv[3];
     pthread_t main_tid;
-    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+
     if (pthread_create(&main_tid, NULL, main_thread, &main_args) != 0) {
         perror("pthread_create");
         exit(1);
     }
+
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+
     pthread_join(main_tid, NULL);
+
     
     return 0;
 }
